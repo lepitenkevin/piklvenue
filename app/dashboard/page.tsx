@@ -269,7 +269,7 @@ async function createCourt(e:FormEvent){e.preventDefault();setError('');try{awai
 {blockCourt !== null && selectedVenue !== null && (
   <>
     <div className="dashboard-section-title">
-      <h2>Manage Court Schedule</h2>
+      <h2>*Manage Court Schedule*</h2>
 
       <button
         type="button"
