@@ -9,6 +9,12 @@ type OwnerBooking = Booking & {
   booking_source?: 'online' | 'walkin';
 };
 type BlockedSlot={id:number;court_id:number;booking_date:string;hour:number};
+type ManagedCourt = Court & {
+  is_active: number | boolean;
+};
+type ManagedVenue = Venue & {
+  is_active: number | boolean;
+};
 function VenueImageUpload({value,onChange,label='Venue photo'}:{value:string;onChange:(url:string)=>void;label?:string}) {
   const [uploading,setUploading]=useState(false);
   const [uploadError,setUploadError]=useState('');
@@ -39,43 +45,226 @@ function VenueImageUpload({value,onChange,label='Venue photo'}:{value:string;onC
   </div>;
 }
 
-export default function Dashboard(){const router=useRouter();const[user,setUser]=useState<User|null>(null),[bookings,setBookings]=useState<Booking[]>([]),[ownerBookings,setOwnerBookings]=useState<OwnerBooking[]>([]),[venues,setVenues]=useState<Venue[]>([]),[selectedVenue,setSelectedVenue]=useState<number|null>(null),[message,setMessage]=useState(''),[error,setError]=useState(''),[showVenue,setShowVenue]=useState(false),[showCourt,setShowCourt]=useState(false);const [proofImage,setProofImage]=useState<string|null>(null);const [proofBusy,setProofBusy]=useState(false);const [managedCourts,setManagedCourts]=useState<Court[]>([]),[editingCourt,setEditingCourt]=useState<number|null>(null),[editingVenue,setEditingVenue]=useState(false);const [blockCourt,setBlockCourt]=useState<number|null>(null),[blockDate,setBlockDate]=useState(localDate(new Date())),[blockHour,setBlockHour]=useState(8),[blockedSlots,setBlockedSlots]=useState<BlockedSlot[]>([]);const [venueForm,setVenueForm]=useState({name:'',city:'',address:'',description:'',phone:'',image_url:'',gcash_number:'',gcash_qr_url:''}),[courtForm,setCourtForm]=useState({name:'Court 1',day_rate:150,night_rate:250,open_hour:8,close_hour:23});function refresh(u:User){if(u.role==='player')request<{bookings:Booking[]}>('/bookings').then(x=>setBookings(x.bookings)).catch(e=>setError(e.message));else {request<{venues:Venue[];bookings:OwnerBooking[]}>('/owner/dashboard').then(x=>{setVenues(x.venues);setOwnerBookings(x.bookings);if(x.venues.length)setSelectedVenue(old=>old??x.venues[0].id)}).catch(e=>setError(e.message))}}useEffect(()=>{let u:User|null=null;try{u=JSON.parse(localStorage.getItem('pv_user')||'null')}catch{}if(!u){router.replace('/login');return}setUser(u);refresh(u)},[router]);useEffect(()=>{if(!selectedVenue)return;request<{courts:Court[]}>(`/owner/courts?venue_id=${selectedVenue}`).then(x=>setManagedCourts(x.courts)).catch(e=>setError(e.message));setEditingCourt(null);setEditingVenue(false)},[selectedVenue]);function logout(){localStorage.removeItem('pv_token');localStorage.removeItem('pv_user');window.dispatchEvent(new Event('pv_auth'));router.push('/')}async function createVenue(e:FormEvent){e.preventDefault();setError('');try{await request('/owner/venues',{method:'POST',body:JSON.stringify(venueForm)});setShowVenue(false);setMessage('Venue created. Add a court to make it bookable.');refresh(user!)}catch(e){setError((e as Error).message)}}async function saveVenue(e:FormEvent){e.preventDefault();setError('');try{await request(`/owner/venues/${selectedVenue}`,{method:'PUT',body:JSON.stringify(venueForm)});setEditingVenue(false);setMessage('Venue details updated.');refresh(user!)}catch(e){setError((e as Error).message)}}
+export default function Dashboard(){const router=useRouter();const[user,setUser]=useState<User|null>(null),[bookings,setBookings]=useState<Booking[]>([]),[ownerBookings,setOwnerBookings]=useState<OwnerBooking[]>([]),[venues,setVenues]=useState<ManagedVenue[]>([]),[selectedVenue,setSelectedVenue]=useState<number|null>(null),[message,setMessage]=useState(''),[error,setError]=useState(''),[showVenue,setShowVenue]=useState(false),[showCourt,setShowCourt]=useState(false);const [proofImage,setProofImage]=useState<string|null>(null);const [proofBusy,setProofBusy]=useState(false);const [managedCourts,setManagedCourts]=useState<Court[]>([]),[editingCourt,setEditingCourt]=useState<number|null>(null),[editingVenue,setEditingVenue]=useState(false);const [blockCourt,setBlockCourt]=useState<number|null>(null),[blockDate,setBlockDate]=useState(localDate(new Date())),[blockHour,setBlockHour]=useState(8),[blockedSlots,setBlockedSlots]=useState<BlockedSlot[]>([]);const [venueForm,setVenueForm]=useState({name:'',city:'',address:'',description:'',phone:'',image_url:'',gcash_number:'',gcash_qr_url:''}),[courtForm,setCourtForm]=useState({name:'Court 1',day_rate:150,night_rate:250,open_hour:8,close_hour:23});function refresh(u:User){if(u.role==='player')request<{bookings:Booking[]}>('/bookings').then(x=>setBookings(x.bookings)).catch(e=>setError(e.message));else {request<{venues:ManagedVenue[];bookings:OwnerBooking[]}>('/owner/dashboard').then(x=>{setVenues(x.venues);setOwnerBookings(x.bookings);if(x.venues.length)setSelectedVenue(old=>old??x.venues[0].id)}).catch(e=>setError(e.message))}}useEffect(()=>{let u:User|null=null;try{u=JSON.parse(localStorage.getItem('pv_user')||'null')}catch{}if(!u){router.replace('/login');return}setUser(u);refresh(u)},[router]);useEffect(()=>{if(!selectedVenue)return;request<{courts:Court[]}>(`/owner/courts?venue_id=${selectedVenue}`).then(x=>setManagedCourts(x.courts)).catch(e=>setError(e.message));setEditingCourt(null);setEditingVenue(false)},[selectedVenue]);function logout(){localStorage.removeItem('pv_token');localStorage.removeItem('pv_user');window.dispatchEvent(new Event('pv_auth'));router.push('/')}async function createVenue(e:FormEvent){e.preventDefault();setError('');try{await request('/owner/venues',{method:'POST',body:JSON.stringify(venueForm)});setShowVenue(false);setMessage('Venue created. Add a court to make it bookable.');refresh(user!)}catch(e){setError((e as Error).message)}}async function saveVenue(e:FormEvent){e.preventDefault();setError('');try{await request(`/owner/venues/${selectedVenue}`,{method:'PUT',body:JSON.stringify(venueForm)});setEditingVenue(false);setMessage('Venue details updated.');refresh(user!)}catch(e){setError((e as Error).message)}}
 async function saveCourt(e:FormEvent){e.preventDefault();setError('');try{await request(`/owner/courts/${editingCourt}`,{method:'PUT',body:JSON.stringify(courtForm)});setEditingCourt(null);setMessage('Court details updated.');const x=await request<{courts:Court[]}>(`/owner/courts?venue_id=${selectedVenue}`);setManagedCourts(x.courts);refresh(user!)}catch(e){setError((e as Error).message)}}
+
+async function toggleCourtVisibility(court: ManagedCourt) {
+  const currentlyActive = Number(court.is_active) === 1;
+
+  const confirmed = window.confirm(
+    currentlyActive
+      ? `Hide "${court.name}" from public bookings?\n\nExisting reservations will be preserved, but players will no longer be able to make new bookings on this court.`
+      : `Restore "${court.name}" and allow public bookings again?`
+  );
+
+  if (!confirmed) return;
+
+  setError('');
+  setMessage('');
+
+  try {
+    await request(
+      `/owner/courts/${court.id}/visibility`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          is_active: !currentlyActive,
+        }),
+      }
+    );
+
+    setMessage(
+      currentlyActive
+        ? `${court.name} is now hidden from public bookings.`
+        : `${court.name} is now publicly available.`
+    );
+
+    const result = await request<{
+      courts: ManagedCourt[];
+    }>(
+      `/owner/courts?venue_id=${selectedVenue}`
+    );
+
+    setManagedCourts(result.courts);
+
+    if (user) {
+      refresh(user);
+    }
+
+  } catch (err) {
+    setError(
+      err instanceof Error
+        ? err.message
+        : 'Unable to update court visibility'
+    );
+  }
+}
+
 async function deleteCourt(c:Court){if(!confirm(`Delete ${c.name}? Courts with booking history cannot be deleted.`))return;setError('');try{await request(`/owner/courts/${c.id}`,{method:'DELETE'});setMessage('Court deleted.');if(blockCourt===c.id)setBlockCourt(null);const x=await request<{courts:Court[]}>(`/owner/courts?venue_id=${selectedVenue}`);setManagedCourts(x.courts);refresh(user!)}catch(e){setError((e as Error).message)}}
 async function deleteVenue(){const v=venues.find(x=>x.id===selectedVenue);if(!v||!confirm(`Delete ${v.name}? Remove its courts first.`))return;setError('');try{await request(`/owner/venues/${v.id}`,{method:'DELETE'});setSelectedVenue(null);setManagedCourts([]);setBlockCourt(null);setMessage('Venue deleted.');refresh(user!)}catch(e){setError((e as Error).message)}}
+
+async function toggleVenueVisibility() {
+  const venue = venues.find(v => v.id === selectedVenue);
+
+  if (!venue) return;
+
+  const currentlyActive = Number(venue.is_active) === 1;
+
+  const confirmed = window.confirm(
+    currentlyActive
+      ? `Hide "${venue.name}"?\n\nIt will disappear from public listings and new online bookings will be disabled. Existing reservations will be preserved.`
+      : `Restore "${venue.name}" to public listings?`
+  );
+
+  if (!confirmed) return;
+
+  setError('');
+  setMessage('');
+
+  try {
+    await request(
+      `/owner/venues/${venue.id}/visibility`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          is_active: !currentlyActive
+        })
+      }
+    );
+
+    setMessage(
+      currentlyActive
+        ? 'Venue hidden successfully.'
+        : 'Venue restored successfully.'
+    );
+
+    if (user) {
+      refresh(user);
+    }
+  } catch (err) {
+    setError(
+      err instanceof Error
+        ? err.message
+        : 'Unable to update venue visibility'
+    );
+  }
+}
+
 async function loadBlocks(courtId:number,date:string){try{const r=await request<{blocked_slots:BlockedSlot[]}>(`/owner/blocked-slots?court_id=${courtId}&date=${date}`);setBlockedSlots(r.blocked_slots)}catch(e){setError((e as Error).message)}}
 async function blockSlot(e:FormEvent){e.preventDefault();if(!blockCourt)return;setError('');try{await request('/owner/blocked-slots',{method:'POST',body:JSON.stringify({court_id:blockCourt,booking_date:blockDate,hour:blockHour})});await loadBlocks(blockCourt,blockDate);setMessage('Hour blocked.');}catch(e){setError((e as Error).message)}}
 async function unblockSlot(id:number){if(!blockCourt||!confirm('Make this hour available for booking again?'))return;setError('');try{await request(`/owner/blocked-slots/${id}`,{method:'DELETE'});await loadBlocks(blockCourt,blockDate);setMessage('Hour unblocked.')}catch(e){setError((e as Error).message)}}
 function startEditVenue(){const v=venues.find(x=>x.id===selectedVenue);if(!v)return;setVenueForm({name:v.name,city:v.city,address:v.address,description:v.description||'',phone:v.phone||'',image_url:v.image_url||'',gcash_number:v.gcash_number||'',gcash_qr_url:v.gcash_qr_url||''});setEditingVenue(true);setShowVenue(false)}
 function startEditCourt(c:Court){setCourtForm({name:c.name,day_rate:Number(c.day_rate),night_rate:Number(c.night_rate),open_hour:Number(c.open_hour),close_hour:Number(c.close_hour)});setEditingCourt(c.id);setShowCourt(false)}
 async function showPaymentProof(id:number){setError('');setProofBusy(true);try{const token=localStorage.getItem('pv_token');const r=await fetch(`/api/backend/owner/bookings/${id}/payment-proof`,{headers:token?{Authorization:`Bearer ${token}`}:{},cache:'no-store'});if(!r.ok){const message=await r.json().catch(()=>({error:'Could not load screenshot'}));throw new Error(message.error||'Could not load screenshot')}const blob=await r.blob();if(!blob.type.startsWith('image/'))throw new Error('Invalid proof image');setProofImage(old=>{if(old)URL.revokeObjectURL(old);return URL.createObjectURL(blob)});}catch(e){setError((e as Error).message)}finally{setProofBusy(false)}}
-async function createCourt(e:FormEvent){e.preventDefault();setError('');try{await request('/owner/courts',{method:'POST',body:JSON.stringify({...courtForm,venue_id:selectedVenue})});setShowCourt(false);setMessage('Court added successfully.');request<{courts:Court[]}>(`/owner/courts?venue_id=${selectedVenue}`).then(x=>setManagedCourts(x.courts));refresh(user!)}catch(e){setError((e as Error).message)}}async function status(id:number,action:'approve'|'reject'|'cancel'){setError('');try{await request(`/owner/bookings/${id}/${action}`,{method:'POST'});setMessage('Reservation updated.');refresh(user!)}catch(e){setError((e as Error).message)}}async function cancelPlayer(id:number){if(!confirm('Cancel this reservation?'))return;try{await request(`/bookings/${id}/cancel`,{method:'POST'});refresh(user!)}catch(e){setError((e as Error).message)}}return <main className="shell dashboard">{proofImage&&<div role="dialog" aria-label="GCash payment screenshot" style={{position:'fixed',inset:0,zIndex:9999,background:'rgba(0,0,0,.8)',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',padding:16}}><button className="btn btn-lime" onClick={()=>{URL.revokeObjectURL(proofImage);setProofImage(null)}}>Close screenshot</button><img src={proofImage} alt="GCash payment proof" style={{maxWidth:'90vw',maxHeight:'80vh',objectFit:'contain',marginTop:12}}/></div>}<div className="dashboard-head"><div><span className="overline">YOUR PIKLVENUE SPACE</span><h1>Hey, {user?.name.split(' ')[0]||'player'} <span>✳</span></h1><p>{user?.role==='owner'?'Manage your venues, courts, and incoming reservations.':'Your games, your schedule. All in one place.'}</p></div><button className="btn btn-outline" onClick={logout}><LogOut size={16}/> Log out</button></div>{message&&<div className="success-box">{message}</div>}{error&&<div className="form-error">{error}</div>}{user?.role==='player'?<><div className="dashboard-section-title"><h2>My reservations</h2><Link href="/" className="btn btn-dark small"><Plus size={16}/> Book a court</Link></div><div className="booking-list">{bookings.map(b=><div className="booking-entry" key={b.id}><div className="booking-icon"><CalendarDays/></div><div className="booking-entry-main"><h3>{b.venue_name}</h3><p>{b.court_name} · {b.booking_date} · {formatBookingHours(b)}</p><small>Reference #{b.id} {b.payment_reference?' · Payment ref: '+b.payment_reference:''}</small></div><div className="booking-entry-side"><span className={`status status-${b.status}`}>{b.status}</span><strong>{money(b.total_amount)}</strong>{['pending','approved'].includes(b.status)&&<button className="text-danger" onClick={()=>cancelPlayer(b.id)}>Cancel</button>}</div></div>)}{!bookings.length&&<div className="empty">No bookings yet. <Link href="/">Explore venues</Link> to find your next game!</div>}</div></>:user?.role==='owner'?<><div className="dashboard-section-title"><h2>My venues</h2><button className="btn btn-dark small" onClick={()=>setShowVenue(!showVenue)}><Plus size={16}/> Add venue</button></div>{showVenue&&<form className="admin-form" onSubmit={createVenue}><h3>Add new venue</h3><div className="form-grid">{(Object.keys(venueForm) as (keyof typeof venueForm)[]).filter(k=>k!=='image_url'&&k!=='gcash_qr_url').map(k=><label key={k}>{k.replace('_',' ')}<input required={['name','city','address'].includes(k)} value={venueForm[k]} onChange={e=>setVenueForm({...venueForm,[k]:e.target.value})}/></label>)}<VenueImageUpload value={venueForm.image_url} onChange={url=>setVenueForm(old=>({...old,image_url:url}))}/><VenueImageUpload label="GCash payment QR code" value={venueForm.gcash_qr_url} onChange={url=>setVenueForm(old=>({...old,gcash_qr_url:url}))}/></div><button className="btn btn-dark">Save venue</button></form>}<div className="owner-venues">{venues.map(v=><button key={v.id} onClick={()=>setSelectedVenue(v.id)} className={`owner-venue ${selectedVenue===v.id?'active':''}`}><MapPin size={19}/><span><strong>{v.name}</strong><small>{v.city} · {v.court_count} courts</small></span></button>)}{!venues.length&&<div className="empty">Add your first venue to get started.</div>}</div>{selectedVenue&&<><div className="dashboard-section-title"><h2>Venue details</h2><button className="btn btn-outline small" onClick={()=>editingVenue?setEditingVenue(false):startEditVenue()}>{editingVenue?'Cancel':'Edit venue'}</button></div>
-<div className="crud-toolbar"><button type="button" className="text-danger" onClick={deleteVenue}><Trash2 size={16}/> Delete empty venue</button></div>
+async function createCourt(e:FormEvent){e.preventDefault();setError('');try{await request('/owner/courts',{method:'POST',body:JSON.stringify({...courtForm,venue_id:selectedVenue})});setShowCourt(false);setMessage('Court added successfully.');request<{courts:Court[]}>(`/owner/courts?venue_id=${selectedVenue}`).then(x=>setManagedCourts(x.courts));refresh(user!)}catch(e){setError((e as Error).message)}}async function status(id:number,action:'approve'|'reject'|'cancel'){setError('');try{await request(`/owner/bookings/${id}/${action}`,{method:'POST'});setMessage('Reservation updated.');refresh(user!)}catch(e){setError((e as Error).message)}}async function cancelPlayer(id:number){if(!confirm('Cancel this reservation?'))return;try{await request(`/bookings/${id}/cancel`,{method:'POST'});refresh(user!)}catch(e){setError((e as Error).message)}}return <main className="shell dashboard">{proofImage&&<div role="dialog" aria-label="GCash payment screenshot" style={{position:'fixed',inset:0,zIndex:9999,background:'rgba(0,0,0,.8)',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',padding:16}}><button className="btn btn-lime" onClick={()=>{URL.revokeObjectURL(proofImage);setProofImage(null)}}>Close screenshot</button><img src={proofImage} alt="GCash payment proof" style={{maxWidth:'90vw',maxHeight:'80vh',objectFit:'contain',marginTop:12}}/></div>}<div className="dashboard-head"><div><span className="overline">YOUR PIKLVENUE SPACE</span><h1>Hey, {user?.name.split(' ')[0]||'player'} <span>✳</span></h1><p>{user?.role==='owner'?'Manage your venues, courts, and incoming reservations.':'Your games, your schedule. All in one place.'}</p></div><button className="btn btn-outline" onClick={logout}><LogOut size={16}/> Log out</button></div>{message&&<div className="success-box">{message}</div>}{error&&<div className="form-error">{error}</div>}{user?.role==='player'?<><div className="dashboard-section-title"><h2>My reservations</h2><Link href="/" className="btn btn-dark small"><Plus size={16}/> Book a court</Link></div><div className="booking-list">{bookings.map(b=><div className="booking-entry" key={b.id}><div className="booking-icon"><CalendarDays/></div><div className="booking-entry-main"><h3>{b.venue_name}</h3><p>{b.court_name} · {b.booking_date} · {formatBookingHours(b)}</p><small>Reference #{b.id} {b.payment_reference?' · Payment ref: '+b.payment_reference:''}</small></div><div className="booking-entry-side"><span className={`status status-${b.status}`}>{b.status}</span><strong>{money(b.total_amount)}</strong>{['pending','approved'].includes(b.status)&&<button className="text-danger" onClick={()=>cancelPlayer(b.id)}>Cancel</button>}</div></div>)}{!bookings.length&&<div className="empty">No bookings yet. <Link href="/">Explore venues</Link> to find your next game!</div>}</div></>:user?.role==='owner'?<><div className="dashboard-section-title"><h2>My venues</h2><button className="btn btn-dark small" onClick={()=>setShowVenue(!showVenue)}><Plus size={16}/> Add venue</button></div>{showVenue&&<form className="admin-form" onSubmit={createVenue}><h3>Add new venue</h3><div className="form-grid">{(Object.keys(venueForm) as (keyof typeof venueForm)[]).filter(k=>k!=='image_url'&&k!=='gcash_qr_url').map(k=><label key={k}>{k.replace('_',' ')}<input required={['name','city','address'].includes(k)} value={venueForm[k]} onChange={e=>setVenueForm({...venueForm,[k]:e.target.value})}/></label>)}<VenueImageUpload value={venueForm.image_url} onChange={url=>setVenueForm(old=>({...old,image_url:url}))}/><VenueImageUpload label="GCash payment QR code" value={venueForm.gcash_qr_url} onChange={url=>setVenueForm(old=>({...old,gcash_qr_url:url}))}/></div><button className="btn btn-dark">Save venue</button></form>}<div className="owner-venues">{venues.map(v=><button key={v.id} onClick={()=>setSelectedVenue(v.id)} className={`owner-venue ${selectedVenue===v.id?'active':''}`}><MapPin size={19}/><span><strong>{v.name}</strong><small>
+  {v.city} · {v.court_count} courts
+  {' · '}
+  {Number(v.is_active) === 1 ? 'Visible' : 'Hidden'}
+</small></span></button>)}{!venues.length&&<div className="empty">Add your first venue to get started.</div>}</div>{selectedVenue&&<>
+
+<div className="dashboard-section-title">
+  <h2>Venue Details</h2>
+
+  <div className="crud-actions">
+    <button
+      type="button"
+      className="btn btn-outline small"
+      onClick={() =>
+        editingVenue
+          ? setEditingVenue(false)
+          : startEditVenue()
+      }
+    >
+      {editingVenue ? 'Cancel' : 'Edit Venue'}
+    </button>
+
+    <button
+      type="button"
+      className="btn btn-outline small"
+      onClick={toggleVenueVisibility}
+    >
+      {Number(
+        venues.find(v => v.id === selectedVenue)?.is_active
+      ) === 1
+        ? 'Hide Venue'
+        : 'Restore Venue'}
+    </button>
+  </div>
+</div>
+
+<div className="crud-toolbar">
+  <button type="button" className="text-danger" onClick={deleteVenue}><Trash2 size={16}/> Delete empty venue</button></div>
 {editingVenue&&<form className="admin-form" onSubmit={saveVenue}><h3>Edit venue information</h3><div className="form-grid">{(Object.keys(venueForm) as (keyof typeof venueForm)[]).filter(k=>k!=='image_url'&&k!=='gcash_qr_url').map(k=><label key={k}>{k.replace('_',' ')}<input required={['name','city','address'].includes(k)} value={venueForm[k]} onChange={e=>setVenueForm({...venueForm,[k]:e.target.value})}/></label>)}<VenueImageUpload value={venueForm.image_url} onChange={url=>setVenueForm(old=>({...old,image_url:url}))}/><VenueImageUpload label="GCash payment QR code" value={venueForm.gcash_qr_url} onChange={url=>setVenueForm(old=>({...old,gcash_qr_url:url}))}/></div><button className="btn btn-dark">Update venue</button></form>}
-<div className="dashboard-section-title"><h2>Court management</h2><button className="btn btn-outline small" onClick={()=>setShowCourt(!showCourt)}><Plus size={16}/> Add court</button></div>{showCourt&&<form className="admin-form" onSubmit={createCourt}><h3>Add court</h3><div className="form-grid"><label>Court name<input value={courtForm.name} required onChange={e=>setCourtForm({...courtForm,name:e.target.value})}/></label>{(['day_rate','night_rate','open_hour','close_hour'] as const).map(k=><label key={k}>{k.replace('_',' ')}<input type="number" required min={k.includes('hour')?0:1} max={k.includes('hour')?24:undefined} value={courtForm[k]} onChange={e=>setCourtForm({...courtForm,[k]:Number(e.target.value)})}/></label>)}</div><p>Night pricing applies from 5 PM onward. All times use the venue's Philippine local time.</p><button className="btn btn-dark">Save court</button></form>}<div className="court-management-list">{managedCourts.map(c=><div className="court-management-item" key={c.id}><div><strong>{c.name}</strong><p>{money(Number(c.day_rate))}/hr day · {money(Number(c.night_rate))}/hr night · {hourLabel(Number(c.open_hour))}–{hourLabel(Number(c.close_hour))}</p></div><div className="crud-actions"><button className="btn btn-outline small" onClick={()=>editingCourt===c.id?setEditingCourt(null):startEditCourt(c)}>{editingCourt===c.id?'Cancel':'Edit court'}</button>
-<button
-  type="button"
-  className="btn btn-outline small"
-  onClick={() => {
-    const nextCourt = blockCourt === c.id ? null : c.id;
+<div className="dashboard-section-title"><h2>Court management</h2><button className="btn btn-outline small" onClick={()=>setShowCourt(!showCourt)}><Plus size={16}/> Add court</button></div>{showCourt&&<form className="admin-form" onSubmit={createCourt}><h3>Add court</h3><div className="form-grid"><label>Court name<input value={courtForm.name} required onChange={e=>setCourtForm({...courtForm,name:e.target.value})}/></label>{(['day_rate','night_rate','open_hour','close_hour'] as const).map(k=><label key={k}>{k.replace('_',' ')}<input type="number" required min={k.includes('hour')?0:1} max={k.includes('hour')?24:undefined} value={courtForm[k]} onChange={e=>setCourtForm({...courtForm,[k]:Number(e.target.value)})}/></label>)}</div><p>Night pricing applies from 5 PM onward. All times use the venue's Philippine local time.</p><button className="btn btn-dark">Save court</button></form>}<div className="court-management-list">{managedCourts.map(c=><div className="court-management-item" key={c.id}><div>
+  <div className="court-name-status">
+  <strong>{c.name}</strong>
 
-    setBlockCourt(nextCourt);
-    setBlockDate(localDate(new Date()));
-    setBlockedSlots([]);
-
-    if (nextCourt !== null) {
-      void loadBlocks(
-        nextCourt,
-        localDate(new Date())
-      );
+  <span
+    className={
+      Number(c.is_active) === 1
+        ? 'court-visibility active'
+        : 'court-visibility hidden'
     }
-  }}
->
-  {blockCourt === c.id
-    ? 'Close Schedule'
-    : 'Manage Schedule'}
-</button>
-<button className="text-danger" onClick={()=>deleteCourt(c)} title="Delete court"><Trash2 size={17}/></button></div></div>)}{!managedCourts.length&&<p>No courts yet — add your first court.</p>}</div>
+  >
+    {Number(c.is_active) === 1
+      ? 'Visible'
+      : 'Hidden'}
+  </span>
+</div><p>{money(Number(c.day_rate))}/hr day · {money(Number(c.night_rate))}/hr night · {hourLabel(Number(c.open_hour))}–{hourLabel(Number(c.close_hour))}</p></div>
+
+<div className="crud-actions">
+  <button
+    type="button"
+    className="btn btn-outline small"
+    onClick={() =>
+      editingCourt === c.id
+        ? setEditingCourt(null)
+        : startEditCourt(c)
+    }
+  >
+    {editingCourt === c.id ? 'Cancel' : 'Edit Court'}
+  </button>
+
+  <button
+    type="button"
+    className="btn btn-outline small"
+    onClick={() => {
+      const next = blockCourt === c.id ? null : c.id;
+
+      setBlockCourt(next);
+      setBlockDate(localDate(new Date()));
+      setBlockedSlots([]);
+
+      if (next !== null) {
+        void loadBlocks(next, localDate(new Date()));
+      }
+    }}
+  >
+    {blockCourt === c.id
+      ? 'Close Schedule'
+      : 'Manage Schedule'}
+  </button>
+
+  <button
+    type="button"
+    className="btn btn-outline small"
+    onClick={() => toggleCourtVisibility(c)}
+  >
+    {Number(c.is_active) === 1
+      ? 'Hide Court'
+      : 'Restore Court'}
+  </button>
+
+  <button
+    type="button"
+    className="text-danger"
+    onClick={() => deleteCourt(c)}
+    title="Permanently delete court (only without history)"
+  >
+    <Trash2 size={17} />
+  </button>
+</div>
+</div>)}{!managedCourts.length&&<p>No courts yet — add your first court.</p>}</div>
 
 {blockCourt !== null && selectedVenue !== null && (
   <>

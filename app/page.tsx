@@ -55,10 +55,7 @@ export default function HomePage() {
     );
   }, [venues, search]);
 
-  const availableVenues = filtered.filter(
-    v => Number(v.court_count) > 0
-  );
-
+  const availableVenues = filtered;
   return (
     <main className="pv-home">
 
@@ -185,7 +182,7 @@ export default function HomePage() {
             </p>
 
             <div className="pv-venue-grid">
-              {availableVenues.slice(0, 6).map(v => (
+              {availableVenues.map(v => (
                 <article
                   className="pv-venue-card"
                   key={v.id}
@@ -233,13 +230,21 @@ export default function HomePage() {
                         </strong>
                       </div>
 
-                      <Link
-                        href={`/venues/${v.id}`}
-                        className="pv-book-btn"
-                      >
-                        Book Now
-                        <ChevronRight size={17} />
-                      </Link>
+                      
+{Number(v.court_count) > 0 ? (
+  <Link
+    href={`/venues/${v.id}`}
+    className="pv-book-btn"
+  >
+    Book Now
+    <ChevronRight size={17} />
+  </Link>
+) : (
+  <span className="pv-book-btn pv-unavailable">
+    Coming Soon
+  </span>
+)}
+
                     </div>
                   </div>
                 </article>
