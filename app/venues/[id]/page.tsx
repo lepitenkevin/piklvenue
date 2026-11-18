@@ -15,6 +15,22 @@ export default function BookingPage(){
  const [hold,setHold]=useState<{booking_id:number;guest_token:string;payment_deadline:string;total_amount:number;gcash_number:string|null;gcash_qr_url:string|null}|null>(null);
  const [seconds,setSeconds]=useState(0);
  const [receipt,setReceipt]=useState<{booking_id:number;total_amount:number}|null>(null);
+ const [promoInput,setPromoInput]=useState('');
+ const [appliedPromo,setAppliedPromo]=useState<{code:string;subtotal_amount:number;discount_amount:number;total_amount:number;min_slots:number;max_slots:number|null}|null>(null);
+ const [promoBusy,setPromoBusy]=useState(false);
+ const chosen=selection?.hours.slice().sort((a,b)=>a-b)??[];
+ const promoKey=`${selection?.courtId??''}|${date}|${chosen.join(',')}`;
+ const [appliedKey,setAppliedKey]=useState('');
+ const validPromo=appliedKey===promoKey?appliedPromo:null;
+ async function applyPromo(){
+   if(!selection||!chosen.length)return;
+   setPromoBusy(true);setErr('');
+   try{
+     const quoted=await request<{code:string;subtotal_amount:number;discount_amount:number;total_amount:number;min_slots:number;max_slots:number|null}>('/discounts/quote',{method:'POST',body:JSON.stringify({court_id:selection.courtId,booking_date:date,selected_hours:chosen,code:promoInput.trim().toUpperCase()})});
+     setAppliedPromo(quoted);setAppliedKey(promoKey);
+   }catch(e){setAppliedPromo(null);setAppliedKey('');setErr((e as Error).message)}finally{setPromoBusy(false)}
+ }
+
  useEffect(()=>{if(!hold)return;const tick=()=>setSeconds(Math.max(0,Math.ceil((new Date(hold.payment_deadline).getTime()-Date.now())/1000)));tick();const timer=setInterval(tick,1000);return()=>clearInterval(timer)},[hold]);
 
  useEffect(()=>{request<{venue:Venue;courts:Court[]}>(`/venues/${id}`).then(x=>{setVenue(x.venue);setCourts(x.courts)}).catch(e=>setErr(e.message)).finally(()=>setLoading(false))},[id]);
@@ -22,16 +38,19 @@ export default function BookingPage(){
  const dates=useMemo(()=>Array.from({length:7},(_,i)=>{const d=today();d.setDate(d.getDate()+offset+i);return d}),[offset]);
  const lookup=new Map(slots.map(s=>[`${s.court_id}-${s.hour}`,s]));
  const selectedCourt=courts.find(c=>c.id===selection?.courtId);
- const chosen=selection?.hours.slice().sort((a,b)=>a-b)??[];
  const total=chosen.reduce((n,h)=>n+(lookup.get(`${selection?.courtId}-${h}`)?.price||0),0);
- function toggle(c:Court,h:number){const s=lookup.get(`${c.id}-${h}`);if(s?.status!=='available')return;setErr('');setSelection(old=>{if(!old||old.courtId!==c.id)return{courtId:c.id,hours:[h]};const hours=old.hours.includes(h)?old.hours.filter(v=>v!==h):[...old.hours,h];return hours.length?{courtId:c.id,hours}:null})}
+ function toggle(c:Court,h:number){const s=lookup.get(`${c.id}-${h}`);if(s?.status!=='available')return;
+  if(validPromo?.max_slots!==null && validPromo?.max_slots!==undefined && selection?.courtId===c.id && !chosen.includes(h) && chosen.length>=validPromo.max_slots){setErr(`Coupon ${validPromo.code} allows at most ${validPromo.max_slots} selected slots. Remove the coupon to book more.`);return;}
+  setErr('');setSelection(old=>{if(!old||old.courtId!==c.id)return{courtId:c.id,hours:[h]};const hours=old.hours.includes(h)?old.hours.filter(v=>v!==h):[...old.hours,h];return hours.length?{courtId:c.id,hours}:null})}
  async function reserve(){
   if(!selection||chosen.length===0)return;
   if(fullName.trim().length<2 || !email.includes('@') || phone.trim().length<7){setErr('Please enter your full name, email and contact number.');return;}
   setBusy(true);setErr('');
   try{
-   const booking=await request<NonNullable<typeof hold>>('/bookings',{method:'POST',body:JSON.stringify({court_id:selection.courtId,booking_date:date,selected_hours:chosen,full_name:fullName.trim(),email:email.trim(),contact_number:phone.trim()})});
-   setHold(booking);setProof(null);
+   const booking=await request<NonNullable<typeof hold> & {payment_required:boolean;status:string}>('/bookings',{method:'POST',body:JSON.stringify({court_id:selection.courtId,booking_date:date,selected_hours:chosen,full_name:fullName.trim(),email:email.trim(),contact_number:phone.trim(),discount_code:validPromo?.code||undefined})});
+   if(booking.payment_required===false){setReceipt({booking_id:booking.booking_id,total_amount:booking.total_amount});setHold(null);setSelection(null);setAppliedPromo(null);setAppliedKey('');}
+   else setHold(booking);
+   setProof(null);
    const availability=await request<{slots:Slot[]}>(`/availability?venue_id=${id}&date=${date}`);setSlots(availability.slots);
   }catch(e){setErr((e as Error).message)}finally{setBusy(false)}
  }
@@ -67,13 +86,19 @@ export default function BookingPage(){
   <div className="pv-checkout-main"><span className="overline">YOUR SELECTED HOURS</span><h3>{selectedCourt.name} <span>· {chosen.length} hour{chosen.length===1?'':'s'}</span></h3>
    <p><CalendarDays size={15}/>{new Date(date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</p>
    <div className="selected-times">{chosen.map(h=><button key={h} onClick={()=>toggle(selectedCourt,h)} title="Remove hour"><Clock3 size={14}/>{hourLabel(h)} – {hourLabel(h+1)} ×</button>)}</div>
+   <div className="pv-promo" style={{margin:'14px 0'}}>
+    <label htmlFor="pv-discount-code">Discount code</label>
+    <div style={{display:'flex',gap:8}}><input id="pv-discount-code" placeholder="e.g. SAVE20" value={promoInput} maxLength={50} onChange={e=>{setPromoInput(e.target.value.toUpperCase());setAppliedPromo(null);setAppliedKey('')}}/>
+    <button type="button" className="btn btn-outline small" disabled={promoBusy||!promoInput.trim()} onClick={()=>void applyPromo()}>{promoBusy?'Checking...':'Apply'}</button></div>
+    {validPromo&&<><p role="status">{validPromo.code}: Save {money(validPromo.discount_amount)}. Final amount {money(validPromo.total_amount)}.{validPromo.max_slots!==null?` Maximum ${validPromo.max_slots} selected hour(s).`:''}</p><button type="button" className="btn btn-outline small" onClick={()=>{setAppliedPromo(null);setAppliedKey('');setPromoInput('');setErr('')}}>Remove coupon</button></>}
+   </div>
    <div className="guest-booking-fields"><h4>Guest booking · No account required</h4>
     <label className="pv-form-field"><span>Full name</span><input required autoComplete="name" placeholder="Your full name" value={fullName} onChange={e=>setFullName(e.target.value)} maxLength={150}/></label>
     <label className="pv-form-field"><span>Contact number</span><input required type="tel" autoComplete="tel" placeholder="09XXXXXXXXX" value={phone} onChange={e=>setPhone(e.target.value)} maxLength={32}/></label>
     <label className="pv-form-field"><span>Email address</span><input required type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={e=>setEmail(e.target.value)} maxLength={190}/></label>
-    <small>Click Request booking to temporarily hold your selected time slots. Then scan the venue's GCash QR and upload your payment screenshot within 5 minutes.</small>
+    <small>For paid bookings: click Request booking, then pay via GCash and upload your screenshot within 5 minutes. Fully discounted bookings go straight to owner approval.</small>
    </div>
-  </div><div className="checkout-right"><span>Total <strong>{money(total)}</strong></span><button className="btn btn-lime" disabled={busy||!!hold} onClick={reserve}>{busy?'Preparing...':'Request booking →'}</button></div>
+  </div><div className="checkout-right">{validPromo&&<span>Subtotal <strong>{money(total)}</strong></span>}{validPromo&&<span>Discount <strong>-{money(validPromo.discount_amount)}</strong></span>}<span>Total <strong>{money(validPromo?validPromo.total_amount:total)}</strong></span><button className="btn btn-lime" disabled={busy||!!hold} onClick={reserve}>{busy?'Preparing...':'Request booking →'}</button></div>
  </aside>}
  {hold&&<div className="pv-payment-backdrop" role="presentation"><section className="pv-payment-modal" role="dialog" aria-modal="true" aria-labelledby="pv-pay-title">
   <div className="pv-payment-header"><div><span className="overline">COMPLETE YOUR PAYMENT</span><h2 id="pv-pay-title">Pay via GCash</h2><p>Booking #{hold.booking_id} · {venue.name}</p></div><button type="button" onClick={()=>void closeHold()} aria-label="Cancel this reservation">✕</button></div>

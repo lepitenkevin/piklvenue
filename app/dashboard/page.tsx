@@ -1,4 +1,4 @@
-'use client';import {FormEvent,useEffect,useState} from 'react';import {useRouter} from 'next/navigation';import Link from 'next/link';import OwnerScheduleTools from './OwnerScheduleTools'; import {CalendarDays,Plus,LogOut,MapPin,CheckCircle2,XCircle,Trash2} from 'lucide-react';import {request,User,Booking,Venue,Court,money,hourLabel,localDate} from '../../lib/api';
+'use client';import {FormEvent,useEffect,useState} from 'react';import {useRouter} from 'next/navigation';import Link from 'next/link';import OwnerScheduleTools from './OwnerScheduleTools';import OwnerDiscountCodes from './OwnerDiscountCodes'; import {CalendarDays,Plus,LogOut,MapPin,CheckCircle2,XCircle,Trash2} from 'lucide-react';import {request,User,Booking,Venue,Court,money,hourLabel,localDate} from '../../lib/api';
 const formatBookingHours=(b:Booking)=>b.selected_hours?b.selected_hours.split(',').map(h=>`${hourLabel(Number(h))}–${hourLabel(Number(h)+1)}`).join(', '):`${hourLabel(Number(b.start_hour))} · ${b.duration} hr`;
 type OwnerBooking = Booking & {
   player_name: string;
@@ -195,7 +195,7 @@ async function createCourt(e:FormEvent){e.preventDefault();setError('');try{awai
 <div className="crud-toolbar">
   <button type="button" className="text-danger" onClick={deleteVenue}><Trash2 size={16}/> Delete empty venue</button></div>
 {editingVenue&&<form className="admin-form" onSubmit={saveVenue}><h3>Edit venue information</h3><div className="form-grid">{(Object.keys(venueForm) as (keyof typeof venueForm)[]).filter(k=>k!=='image_url'&&k!=='gcash_qr_url').map(k=><label key={k}>{k.replace('_',' ')}<input required={['name','city','address'].includes(k)} value={venueForm[k]} onChange={e=>setVenueForm({...venueForm,[k]:e.target.value})}/></label>)}<VenueImageUpload value={venueForm.image_url} onChange={url=>setVenueForm(old=>({...old,image_url:url}))}/><VenueImageUpload label="GCash payment QR code" value={venueForm.gcash_qr_url} onChange={url=>setVenueForm(old=>({...old,gcash_qr_url:url}))}/></div><button className="btn btn-dark">Update venue</button></form>}
-<div className="dashboard-section-title"><h2>Court management</h2><button className="btn btn-outline small" onClick={()=>setShowCourt(!showCourt)}><Plus size={16}/> Add court</button></div>{showCourt&&<form className="admin-form" onSubmit={createCourt}><h3>Add court</h3><div className="form-grid"><label>Court name<input value={courtForm.name} required onChange={e=>setCourtForm({...courtForm,name:e.target.value})}/></label>{(['day_rate','night_rate','open_hour','close_hour'] as const).map(k=><label key={k}>{k.replace('_',' ')}<input type="number" required min={k.includes('hour')?0:1} max={k.includes('hour')?24:undefined} value={courtForm[k]} onChange={e=>setCourtForm({...courtForm,[k]:Number(e.target.value)})}/></label>)}</div><p>Night pricing applies from 5 PM onward. All times use the venue's Philippine local time.</p><button className="btn btn-dark">Save court</button></form>}<div className="court-management-list">{managedCourts.map(c=><div className="court-management-item" key={c.id}><div>
+<OwnerDiscountCodes venueId={selectedVenue}/><div className="dashboard-section-title"><h2>Court management</h2><button className="btn btn-outline small" onClick={()=>setShowCourt(!showCourt)}><Plus size={16}/> Add court</button></div>{showCourt&&<form className="admin-form" onSubmit={createCourt}><h3>Add court</h3><div className="form-grid"><label>Court name<input value={courtForm.name} required onChange={e=>setCourtForm({...courtForm,name:e.target.value})}/></label>{(['day_rate','night_rate','open_hour','close_hour'] as const).map(k=><label key={k}>{k.replace('_',' ')}<input type="number" required min={k.includes('hour')?0:1} max={k.includes('hour')?24:undefined} value={courtForm[k]} onChange={e=>setCourtForm({...courtForm,[k]:Number(e.target.value)})}/></label>)}</div><p>Night pricing applies from 5 PM onward. All times use the venue's Philippine local time.</p><button className="btn btn-dark">Save court</button></form>}<div className="court-management-list">{managedCourts.map(c=><div className="court-management-item" key={c.id}><div>
   <div className="court-name-status">
   <strong>{c.name}</strong>
 
@@ -269,7 +269,7 @@ async function createCourt(e:FormEvent){e.preventDefault();setError('');try{awai
 {blockCourt !== null && selectedVenue !== null && (
   <>
     <div className="dashboard-section-title">
-      <h2>*Manage Court Schedule*</h2>
+      <h2>Manage Court Schedule</h2>
 
       <button
         type="button"
