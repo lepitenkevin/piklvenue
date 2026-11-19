@@ -70,10 +70,13 @@ export default function BookingPage(){
    request<{slots:Slot[]}>(`/availability?venue_id=${id}&date=${date}`).then(x=>setSlots(x.slots)).catch(()=>{});
  }
  const clock=`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
+ const venuePhone=venue?.phone?.trim();
+ const phoneNumber=venuePhone?.replace(/[^+\d]/g,'');
 
  return <main className="booking-page shell"><Link href="/venues" className="back"><ArrowLeft size={16}/> All courts</Link>
  {loading?<p>Loading court information...</p>:venue?<>
  <section className="venue-banner"><div><div className="eyebrow">BOOK YOUR NEXT MATCH</div><h1>{venue.name}</h1><div className="venue-meta"><span><MapPin size={16}/>{venue.address}</span><span>🏓 {courts.length} pickleball courts</span></div><p>{venue.description}</p></div><div className="banner-symbol">✳</div></section>
+ {phoneNumber&&/^\+?\d+$/.test(phoneNumber)&&<p className="venue-contact">Venue phone <a href={`tel:${phoneNumber}`}>{venuePhone}</a></p>}
  {receipt&&<section className="success-box" role="status"><h2>Booking request submitted!</h2><p>Booking #{receipt.booking_id} · Total {money(receipt.total_amount)}. Your reservation is pending owner approval. Save your booking number for reference. GCash payment has not been automatically verified.</p><p>Contact the venue owner for confirmation.</p></section>}
  <section className="board-section"><div className="board-top"><div><span className="overline">PICK A DATE</span><h2>Choose your <em>play time.</em></h2></div><div className="legend"><span><i className="key green"/> Available</span><span><i className="key red"/> Booked</span><span><i className="key gray"/> Unavailable</span></div></div>
  <div className="date-picker"><button aria-label="Previous week" disabled={offset===0} onClick={()=>setOffset(Math.max(0,offset-7))}><ChevronLeft/></button>{dates.map(d=><button key={localDate(d)} className={`day-button ${date===localDate(d)?'active':''}`} onClick={()=>setDate(localDate(d))}><small>{d.toLocaleDateString('en-US',{weekday:'short'})}</small><strong>{d.getDate()}</strong><small>{d.toLocaleDateString('en-US',{month:'short'})}</small></button>)}<button aria-label="Next week" onClick={()=>setOffset(offset+7)}><ChevronRight/></button></div>

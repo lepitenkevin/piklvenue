@@ -1,0 +1,84 @@
+.page {
+  min-height: calc(100svh - 155px);
+  padding-block: clamp(48px, 8vw, 100px);
+  background: var(--cream);
+}
+
+.intro {
+  max-width: 760px;
+  margin-bottom: clamp(24px, 4vw, 46px);
+}
+
+.intro h1 {
+  margin-bottom: 14px;
+  font-size: clamp(2.5rem, 6vw, 4.75rem);
+  line-height: 1.06;
+  letter-spacing: -.055em;
+}
+
+.intro p,
+.card p {
+  color: #465d54;
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.intro p {
+  max-width: 570px;
+  margin-bottom: 0;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+  gap: 20px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: clamp(22px, 3vw, 32px);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: white;
+}
+
+.icon {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 20px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--lime);
+  color: var(--dark);
+}
+
+.card h2 {
+  margin-bottom: 8px;
+  font-size: 1.35rem;
+}
+
+.card p {
+  margin-bottom: 22px;
+}
+
+.card > a,
+.actions {
+  margin-top: auto;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.email {
+  padding-block: 10px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
