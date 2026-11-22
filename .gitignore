@@ -8,6 +8,9 @@
 out/
 build/
 
+#backend
+backend/.env
+
 # Dependencies
 node_modules/
 
