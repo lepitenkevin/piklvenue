@@ -1,8 +1,9 @@
 // Same-origin Next.js proxy. The private key never reaches the browser.
 export const API = '/api/backend';
 export type User={id:number;name:string;email:string;role:'player'|'owner';phone?:string};
-export type Venue={id:number;name:string;city:string;address:string;description:string;image_url:string|null;gcash_number?:string|null;gcash_qr_url?:string|null;court_count:number;price_from:number;owner_id?:number;phone?:string};
-export type Court={id:number;name:string;day_rate:number;night_rate:number;open_hour:number;close_hour:number};
+export type Venue={id:number;name:string;city:string;address:string;description:string;image_url:string|null;gcash_number?:string|null;gcash_qr_url?:string|null;court_count:number;price_from:number;owner_id?:number;phone?:string;has_live_court?:number|boolean};
+export type Court={id:number;name:string;day_rate:number;night_rate:number;open_hour:number;close_hour:number;terms_and_conditions?:string|null;facebook_live_url?:string|null;facebook_live_active?:number|boolean};
+export const isCourtLive = (court?: Court) => Boolean(court?.facebook_live_url) && Number(court?.facebook_live_active) === 1;
 export type Slot={court_id:number;hour:number;price:number;status:'available'|'booked'|'blocked'|'closed'};
 export type Booking={id:number;venue_name:string;court_name:string;booking_date:string;start_hour:number;duration:number;total_amount:number;status:string;payment_reference:string|null;created_at:string;selected_hours?:string|null};
 export async function request<T>(path:string,options:RequestInit={}):Promise<T>{

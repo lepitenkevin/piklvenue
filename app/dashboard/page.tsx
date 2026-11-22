@@ -1,4 +1,4 @@
-'use client';import {FormEvent,useEffect,useState} from 'react';import {useRouter} from 'next/navigation';import Link from 'next/link';import OwnerScheduleTools from './OwnerScheduleTools';import OwnerDiscountCodes from './OwnerDiscountCodes'; import {CalendarDays,Plus,LogOut,MapPin,CheckCircle2,XCircle,Trash2} from 'lucide-react';import {request,User,Booking,Venue,Court,money,hourLabel,localDate} from '../../lib/api';
+'use client';import {FormEvent,useEffect,useId,useState} from 'react';import {useRouter} from 'next/navigation';import Link from 'next/link';import OwnerScheduleTools from './OwnerScheduleTools';import OwnerDiscountCodes from './OwnerDiscountCodes'; import {CalendarDays,Plus,LogOut,MapPin,CheckCircle2,XCircle,Trash2} from 'lucide-react';import {request,User,Booking,Venue,Court,money,hourLabel,localDate,isCourtLive} from '../../lib/api';
 const formatBookingHours=(b:Booking)=>b.selected_hours?b.selected_hours.split(',').map(h=>`${hourLabel(Number(h))}–${hourLabel(Number(h)+1)}`).join(', '):`${hourLabel(Number(b.start_hour))} · ${b.duration} hr`;
 type OwnerBooking = Booking & {
   player_name: string;
@@ -15,6 +15,68 @@ type ManagedCourt = Court & {
 type ManagedVenue = Venue & {
   is_active: number | boolean;
 };
+const emptyCourtForm = {
+  name: 'Court 1',
+  day_rate: 150,
+  night_rate: 250,
+  open_hour: 8,
+  close_hour: 23,
+  terms_and_conditions: '',
+  facebook_live_url: '',
+  facebook_live_active: false,
+};
+
+function CourtFacebookLiveField({ url, isLive, onUrlChange, onLiveChange }: {
+  url: string;
+  isLive: boolean;
+  onUrlChange: (url: string) => void;
+  onLiveChange: (isLive: boolean) => void;
+}) {
+  const helpId = useId();
+  return (
+    <div className="court-facebook-field">
+      <label>
+        Facebook Live link (optional)
+        <input
+          type="url"
+          maxLength={1000}
+          aria-describedby={helpId}
+          value={url}
+          onChange={event => onUrlChange(event.target.value)}
+          placeholder="https://www.facebook.com/your-page/videos/123456789"
+        />
+        <small id={helpId}>Use the full public video link for in-page playback.</small>
+      </label>
+      <label className="court-live-toggle">
+        <input
+          type="checkbox"
+          checked={isLive}
+          disabled={!url.trim()}
+          onChange={event => onLiveChange(event.target.checked)}
+        />
+        Mark court as live now
+      </label>
+      <small>Uncheck this and save when the broadcast ends. The video link stays saved.</small>
+    </div>
+  );
+}
+
+function CourtTermsField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return (
+    <label>
+      Terms and conditions (optional)
+      <textarea
+        className="court-terms-input"
+        rows={5}
+        maxLength={4000}
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        placeholder="For example, cancellation rules or court etiquette"
+      />
+    </label>
+  );
+}
+
 function VenueImageUpload({value,onChange,label='Venue photo'}:{value:string;onChange:(url:string)=>void;label?:string}) {
   const [uploading,setUploading]=useState(false);
   const [uploadError,setUploadError]=useState('');
@@ -45,8 +107,53 @@ function VenueImageUpload({value,onChange,label='Venue photo'}:{value:string;onC
   </div>;
 }
 
-export default function Dashboard(){const router=useRouter();const[user,setUser]=useState<User|null>(null),[bookings,setBookings]=useState<Booking[]>([]),[ownerBookings,setOwnerBookings]=useState<OwnerBooking[]>([]),[venues,setVenues]=useState<ManagedVenue[]>([]),[selectedVenue,setSelectedVenue]=useState<number|null>(null),[message,setMessage]=useState(''),[error,setError]=useState(''),[showVenue,setShowVenue]=useState(false),[showCourt,setShowCourt]=useState(false);const [proofImage,setProofImage]=useState<string|null>(null);const [proofBusy,setProofBusy]=useState(false);const [managedCourts,setManagedCourts]=useState<ManagedCourt[]>([]),[editingCourt,setEditingCourt]=useState<number|null>(null),[editingVenue,setEditingVenue]=useState(false);const [blockCourt,setBlockCourt]=useState<number|null>(null),[blockDate,setBlockDate]=useState(localDate(new Date())),[blockHour,setBlockHour]=useState(8),[blockedSlots,setBlockedSlots]=useState<BlockedSlot[]>([]);const [venueForm,setVenueForm]=useState({name:'',city:'',address:'',description:'',phone:'',image_url:'',gcash_number:'',gcash_qr_url:''}),[courtForm,setCourtForm]=useState({name:'Court 1',day_rate:150,night_rate:250,open_hour:8,close_hour:23});function refresh(u:User){if(u.role==='player')request<{bookings:Booking[]}>('/bookings').then(x=>setBookings(x.bookings)).catch(e=>setError(e.message));else {request<{venues:ManagedVenue[];bookings:OwnerBooking[]}>('/owner/dashboard').then(x=>{setVenues(x.venues);setOwnerBookings(x.bookings);if(x.venues.length)setSelectedVenue(old=>old??x.venues[0].id)}).catch(e=>setError(e.message))}}useEffect(()=>{let u:User|null=null;try{u=JSON.parse(localStorage.getItem('pv_user')||'null')}catch{}if(!u){router.replace('/login');return}setUser(u);refresh(u)},[router]);useEffect(()=>{if(!selectedVenue)return;request<{courts:ManagedCourt[]}>(`/owner/courts?venue_id=${selectedVenue}`).then(x=>setManagedCourts(x.courts)).catch(e=>setError(e.message));setEditingCourt(null);setEditingVenue(false)},[selectedVenue]);function logout(){localStorage.removeItem('pv_token');localStorage.removeItem('pv_user');window.dispatchEvent(new Event('pv_auth'));router.push('/')}async function createVenue(e:FormEvent){e.preventDefault();setError('');try{await request('/owner/venues',{method:'POST',body:JSON.stringify(venueForm)});setShowVenue(false);setMessage('Venue created. Add a court to make it bookable.');refresh(user!)}catch(e){setError((e as Error).message)}}async function saveVenue(e:FormEvent){e.preventDefault();setError('');try{await request(`/owner/venues/${selectedVenue}`,{method:'PUT',body:JSON.stringify(venueForm)});setEditingVenue(false);setMessage('Venue details updated.');refresh(user!)}catch(e){setError((e as Error).message)}}
-async function saveCourt(e:FormEvent){e.preventDefault();setError('');try{await request(`/owner/courts/${editingCourt}`,{method:'PUT',body:JSON.stringify(courtForm)});setEditingCourt(null);setMessage('Court details updated.');const x=await request<{courts:ManagedCourt[]}>(`/owner/courts?venue_id=${selectedVenue}`);setManagedCourts(x.courts);refresh(user!)}catch(e){setError((e as Error).message)}}
+export default function Dashboard(){const router=useRouter();const[user,setUser]=useState<User|null>(null),[bookings,setBookings]=useState<Booking[]>([]),[ownerBookings,setOwnerBookings]=useState<OwnerBooking[]>([]),[venues,setVenues]=useState<ManagedVenue[]>([]),[selectedVenue,setSelectedVenue]=useState<number|null>(null),[message,setMessage]=useState(''),[error,setError]=useState(''),[showVenue,setShowVenue]=useState(false),[showCourt,setShowCourt]=useState(false);const [proofImage,setProofImage]=useState<string|null>(null);const [proofBusy,setProofBusy]=useState(false);const [managedCourts,setManagedCourts]=useState<ManagedCourt[]>([]),[editingCourt,setEditingCourt]=useState<number|null>(null),[editingVenue,setEditingVenue]=useState(false);const [blockCourt,setBlockCourt]=useState<number|null>(null),[blockDate,setBlockDate]=useState(localDate(new Date())),[blockHour,setBlockHour]=useState(8),[blockedSlots,setBlockedSlots]=useState<BlockedSlot[]>([]);const [venueForm,setVenueForm]=useState({name:'',city:'',address:'',description:'',phone:'',image_url:'',gcash_number:'',gcash_qr_url:''}),[courtForm,setCourtForm]=useState(emptyCourtForm);function refresh(u:User){if(u.role==='player')request<{bookings:Booking[]}>('/bookings').then(x=>setBookings(x.bookings)).catch(e=>setError(e.message));else {request<{venues:ManagedVenue[];bookings:OwnerBooking[]}>('/owner/dashboard').then(x=>{setVenues(x.venues);setOwnerBookings(x.bookings);if(x.venues.length)setSelectedVenue(old=>old??x.venues[0].id)}).catch(e=>setError(e.message))}}useEffect(()=>{let u:User|null=null;try{u=JSON.parse(localStorage.getItem('pv_user')||'null')}catch{}if(!u){router.replace('/login');return}setUser(u);refresh(u)},[router]);useEffect(()=>{if(!selectedVenue)return;request<{courts:ManagedCourt[]}>(`/owner/courts?venue_id=${selectedVenue}`).then(x=>setManagedCourts(x.courts)).catch(e=>setError(e.message));setEditingCourt(null);setEditingVenue(false);setShowCourt(false)},[selectedVenue]);function logout(){localStorage.removeItem('pv_token');localStorage.removeItem('pv_user');window.dispatchEvent(new Event('pv_auth'));router.push('/')}async function createVenue(e:FormEvent){e.preventDefault();setError('');try{await request('/owner/venues',{method:'POST',body:JSON.stringify(venueForm)});setShowVenue(false);setMessage('Venue created. Add a court to make it bookable.');refresh(user!)}catch(e){setError((e as Error).message)}}async function saveVenue(e:FormEvent){e.preventDefault();setError('');try{await request(`/owner/venues/${selectedVenue}`,{method:'PUT',body:JSON.stringify(venueForm)});setEditingVenue(false);setMessage('Venue details updated.');refresh(user!)}catch(e){setError((e as Error).message)}}
+async function saveCourt(e: FormEvent) {
+  e.preventDefault();
+  setMessage('');
+  setError('');
+  const { terms_and_conditions, facebook_live_url, facebook_live_active, ...details } = courtForm;
+  const terms = terms_and_conditions.trim();
+  const liveUrl = facebook_live_url.trim();
+  const previousCourt = managedCourts.find(court => court.id === editingCourt);
+  const termsChanged = terms !== (previousCourt?.terms_and_conditions ?? '');
+  const liveUrlChanged = liveUrl !== (previousCourt?.facebook_live_url ?? '');
+  const liveStatusChanged = facebook_live_active !== isCourtLive(previousCourt);
+
+  try {
+    await request(`/owner/courts/${editingCourt}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        ...details,
+        ...(termsChanged ? { terms_and_conditions: terms || null } : {}),
+        ...(liveUrlChanged ? { facebook_live_url: liveUrl || null } : {}),
+        ...(liveStatusChanged || liveUrlChanged ? { facebook_live_active } : {}),
+      }),
+    });
+    const { courts } = await request<{ courts: ManagedCourt[] }>(`/owner/courts?venue_id=${selectedVenue}`);
+    setManagedCourts(courts);
+    refresh(user!);
+
+    const updatedCourt = courts.find(court => court.id === editingCourt);
+    if (liveUrlChanged && updatedCourt?.facebook_live_url !== (liveUrl || null)) {
+      setError('Court details were updated, but the Facebook Live link could not be verified.');
+      return;
+    }
+    if ((liveStatusChanged || liveUrlChanged) && isCourtLive(updatedCourt) !== facebook_live_active) {
+      setError('Court details were updated, but the live status could not be verified.');
+      return;
+    }
+    if (termsChanged && (!updatedCourt || (updatedCourt.terms_and_conditions ?? '') !== terms)) {
+      setError('Court details were updated, but the terms and conditions could not be verified.');
+      return;
+    }
+
+    setEditingCourt(null);
+    setMessage('Court details updated.');
+  } catch (error) {
+    setError((error as Error).message);
+  }
+}
 
 async function toggleCourtVisibility(court: ManagedCourt) {
   const currentlyActive = Number(court.is_active) === 1;
@@ -154,9 +261,71 @@ async function loadBlocks(courtId:number,date:string){try{const r=await request<
 async function blockSlot(e:FormEvent){e.preventDefault();if(!blockCourt)return;setError('');try{await request('/owner/blocked-slots',{method:'POST',body:JSON.stringify({court_id:blockCourt,booking_date:blockDate,hour:blockHour})});await loadBlocks(blockCourt,blockDate);setMessage('Hour blocked.');}catch(e){setError((e as Error).message)}}
 async function unblockSlot(id:number){if(!blockCourt||!confirm('Make this hour available for booking again?'))return;setError('');try{await request(`/owner/blocked-slots/${id}`,{method:'DELETE'});await loadBlocks(blockCourt,blockDate);setMessage('Hour unblocked.')}catch(e){setError((e as Error).message)}}
 function startEditVenue(){const v=venues.find(x=>x.id===selectedVenue);if(!v)return;setVenueForm({name:v.name,city:v.city,address:v.address,description:v.description||'',phone:v.phone||'',image_url:v.image_url||'',gcash_number:v.gcash_number||'',gcash_qr_url:v.gcash_qr_url||''});setEditingVenue(true);setShowVenue(false)}
-function startEditCourt(c:ManagedCourt){setCourtForm({name:c.name,day_rate:Number(c.day_rate),night_rate:Number(c.night_rate),open_hour:Number(c.open_hour),close_hour:Number(c.close_hour)});setEditingCourt(c.id);setShowCourt(false)}
+function updateCourtLiveUrl(url: string) {
+  setCourtForm(current => ({
+    ...current,
+    facebook_live_url: url,
+    facebook_live_active: Boolean(url.trim()) && current.facebook_live_active,
+  }));
+}
+function startEditCourt(court: ManagedCourt) {
+  setCourtForm({
+    name: court.name,
+    day_rate: Number(court.day_rate),
+    night_rate: Number(court.night_rate),
+    open_hour: Number(court.open_hour),
+    close_hour: Number(court.close_hour),
+    terms_and_conditions: court.terms_and_conditions ?? '',
+    facebook_live_url: court.facebook_live_url ?? '',
+    facebook_live_active: isCourtLive(court),
+  });
+  setEditingCourt(court.id);
+  setShowCourt(false);
+}
 async function showPaymentProof(id:number){setError('');setProofBusy(true);try{const token=localStorage.getItem('pv_token');const r=await fetch(`/api/backend/owner/bookings/${id}/payment-proof`,{headers:token?{Authorization:`Bearer ${token}`}:{},cache:'no-store'});if(!r.ok){const message=await r.json().catch(()=>({error:'Could not load screenshot'}));throw new Error(message.error||'Could not load screenshot')}const blob=await r.blob();if(!blob.type.startsWith('image/'))throw new Error('Invalid proof image');setProofImage(old=>{if(old)URL.revokeObjectURL(old);return URL.createObjectURL(blob)});}catch(e){setError((e as Error).message)}finally{setProofBusy(false)}}
-async function createCourt(e:FormEvent){e.preventDefault();setError('');try{await request('/owner/courts',{method:'POST',body:JSON.stringify({...courtForm,venue_id:selectedVenue})});setShowCourt(false);setMessage('Court added successfully.');request<{courts:ManagedCourt[]}>(`/owner/courts?venue_id=${selectedVenue}`).then(x=>setManagedCourts(x.courts));refresh(user!)}catch(e){setError((e as Error).message)}}async function status(id:number,action:'approve'|'reject'|'cancel'){setError('');try{await request(`/owner/bookings/${id}/${action}`,{method:'POST'});setMessage('Reservation updated.');refresh(user!)}catch(e){setError((e as Error).message)}}async function cancelPlayer(id:number){if(!confirm('Cancel this reservation?'))return;try{await request(`/bookings/${id}/cancel`,{method:'POST'});refresh(user!)}catch(e){setError((e as Error).message)}}return <main className="shell dashboard">{proofImage&&<div role="dialog" aria-label="GCash payment screenshot" style={{position:'fixed',inset:0,zIndex:9999,background:'rgba(0,0,0,.8)',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',padding:16}}><button className="btn btn-lime" onClick={()=>{URL.revokeObjectURL(proofImage);setProofImage(null)}}>Close screenshot</button><img src={proofImage} alt="GCash payment proof" style={{maxWidth:'90vw',maxHeight:'80vh',objectFit:'contain',marginTop:12}}/></div>}<div className="dashboard-head"><div><span className="overline">YOUR PIKLVENUE SPACE</span><h1>Hey, {user?.name.split(' ')[0]||'player'} <span>✳</span></h1><p>{user?.role==='owner'?'Manage your venues, courts, and incoming reservations.':'Your games, your schedule. All in one place.'}</p></div><button className="btn btn-outline" onClick={logout}><LogOut size={16}/> Log out</button></div>{message&&<div className="success-box">{message}</div>}{error&&<div className="form-error">{error}</div>}{user?.role==='player'?<><div className="dashboard-section-title"><h2>My reservations</h2><Link href="/" className="btn btn-dark small"><Plus size={16}/> Book a court</Link></div><div className="booking-list">{bookings.map(b=><div className="booking-entry" key={b.id}><div className="booking-icon"><CalendarDays/></div><div className="booking-entry-main"><h3>{b.venue_name}</h3><p>{b.court_name} · {b.booking_date} · {formatBookingHours(b)}</p><small>Reference #{b.id} {b.payment_reference?' · Payment ref: '+b.payment_reference:''}</small></div><div className="booking-entry-side"><span className={`status status-${b.status}`}>{b.status}</span><strong>{money(b.total_amount)}</strong>{['pending','approved'].includes(b.status)&&<button className="text-danger" onClick={()=>cancelPlayer(b.id)}>Cancel</button>}</div></div>)}{!bookings.length&&<div className="empty">No bookings yet. <Link href="/">Explore venues</Link> to find your next game!</div>}</div></>:user?.role==='owner'?<><div className="dashboard-section-title"><h2>My venues</h2><button className="btn btn-dark small" onClick={()=>setShowVenue(!showVenue)}><Plus size={16}/> Add venue</button></div>{showVenue&&<form className="admin-form" onSubmit={createVenue}><h3>Add new venue</h3><div className="form-grid">{(Object.keys(venueForm) as (keyof typeof venueForm)[]).filter(k=>k!=='image_url'&&k!=='gcash_qr_url').map(k=><label key={k}>{k.replace('_',' ')}<input required={['name','city','address'].includes(k)} value={venueForm[k]} onChange={e=>setVenueForm({...venueForm,[k]:e.target.value})}/></label>)}<VenueImageUpload value={venueForm.image_url} onChange={url=>setVenueForm(old=>({...old,image_url:url}))}/><VenueImageUpload label="GCash payment QR code" value={venueForm.gcash_qr_url} onChange={url=>setVenueForm(old=>({...old,gcash_qr_url:url}))}/></div><button className="btn btn-dark">Save venue</button></form>}<div className="owner-venues">{venues.map(v=><button key={v.id} onClick={()=>setSelectedVenue(v.id)} className={`owner-venue ${selectedVenue===v.id?'active':''}`}><MapPin size={19}/><span><strong>{v.name}</strong><small>
+async function createCourt(e: FormEvent) {
+  e.preventDefault();
+  setMessage('');
+  setError('');
+  const { terms_and_conditions, facebook_live_url, facebook_live_active, ...details } = courtForm;
+  const terms = terms_and_conditions.trim();
+  const liveUrl = facebook_live_url.trim();
+  try {
+    const { id } = await request<{ id: number }>('/owner/courts', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...details,
+        venue_id: selectedVenue,
+        ...(terms ? { terms_and_conditions: terms } : {}),
+        ...(liveUrl ? { facebook_live_url: liveUrl } : {}),
+        ...(facebook_live_active ? { facebook_live_active } : {}),
+      }),
+    });
+    setShowCourt(false);
+    const { courts } = await request<{ courts: ManagedCourt[] }>(`/owner/courts?venue_id=${selectedVenue}`);
+    setManagedCourts(courts);
+    refresh(user!);
+
+    const createdCourt = courts.find(court => court.id === id);
+    if (liveUrl && createdCourt?.facebook_live_url !== liveUrl) {
+      setError('Court added. The server did not return its Facebook Live link.');
+      return;
+    }
+    if (facebook_live_active && !isCourtLive(createdCourt)) {
+      setError('Court added. The server did not return its live status.');
+      return;
+    }
+    if (terms && createdCourt?.terms_and_conditions !== terms) {
+      setError('Court added. The server did not return its terms and conditions.');
+      return;
+    }
+
+    setMessage('Court added successfully.');
+  } catch (error) {
+    setError((error as Error).message);
+  }
+}
+async function status(id:number,action:'approve'|'reject'|'cancel'){setError('');try{await request(`/owner/bookings/${id}/${action}`,{method:'POST'});setMessage('Reservation updated.');refresh(user!)}catch(e){setError((e as Error).message)}}async function cancelPlayer(id:number){if(!confirm('Cancel this reservation?'))return;try{await request(`/bookings/${id}/cancel`,{method:'POST'});refresh(user!)}catch(e){setError((e as Error).message)}}return <main className="shell dashboard">{proofImage&&<div role="dialog" aria-label="GCash payment screenshot" style={{position:'fixed',inset:0,zIndex:9999,background:'rgba(0,0,0,.8)',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',padding:16}}><button className="btn btn-lime" onClick={()=>{URL.revokeObjectURL(proofImage);setProofImage(null)}}>Close screenshot</button><img src={proofImage} alt="GCash payment proof" style={{maxWidth:'90vw',maxHeight:'80vh',objectFit:'contain',marginTop:12}}/></div>}<div className="dashboard-head"><div><span className="overline">YOUR PIKLVENUE SPACE</span><h1>Hey, {user?.name.split(' ')[0]||'player'} <span>✳</span></h1><p>{user?.role==='owner'?'Manage your venues, courts, and incoming reservations.':'Your games, your schedule. All in one place.'}</p></div><button className="btn btn-outline" onClick={logout}><LogOut size={16}/> Log out</button></div>{message&&<div className="success-box">{message}</div>}{error&&<div className="form-error">{error}</div>}{user?.role==='player'?<><div className="dashboard-section-title"><h2>My reservations</h2><Link href="/" className="btn btn-dark small"><Plus size={16}/> Book a court</Link></div><div className="booking-list">{bookings.map(b=><div className="booking-entry" key={b.id}><div className="booking-icon"><CalendarDays/></div><div className="booking-entry-main"><h3>{b.venue_name}</h3><p>{b.court_name} · {b.booking_date} · {formatBookingHours(b)}</p><small>Reference #{b.id} {b.payment_reference?' · Payment ref: '+b.payment_reference:''}</small></div><div className="booking-entry-side"><span className={`status status-${b.status}`}>{b.status}</span><strong>{money(b.total_amount)}</strong>{['pending','approved'].includes(b.status)&&<button className="text-danger" onClick={()=>cancelPlayer(b.id)}>Cancel</button>}</div></div>)}{!bookings.length&&<div className="empty">No bookings yet. <Link href="/">Explore venues</Link> to find your next game!</div>}</div></>:user?.role==='owner'?<><div className="dashboard-section-title"><h2>My venues</h2><button className="btn btn-dark small" onClick={()=>setShowVenue(!showVenue)}><Plus size={16}/> Add venue</button></div>{showVenue&&<form className="admin-form" onSubmit={createVenue}><h3>Add new venue</h3><div className="form-grid">{(Object.keys(venueForm) as (keyof typeof venueForm)[]).filter(k=>k!=='image_url'&&k!=='gcash_qr_url').map(k=><label key={k}>{k.replace('_',' ')}<input required={['name','city','address'].includes(k)} value={venueForm[k]} onChange={e=>setVenueForm({...venueForm,[k]:e.target.value})}/></label>)}<VenueImageUpload value={venueForm.image_url} onChange={url=>setVenueForm(old=>({...old,image_url:url}))}/><VenueImageUpload label="GCash payment QR code" value={venueForm.gcash_qr_url} onChange={url=>setVenueForm(old=>({...old,gcash_qr_url:url}))}/></div><button className="btn btn-dark">Save venue</button></form>}<div className="owner-venues">{venues.map(v=><button key={v.id} onClick={()=>setSelectedVenue(v.id)} className={`owner-venue ${selectedVenue===v.id?'active':''}`}><MapPin size={19}/><span><strong>{v.name}</strong><small>
   {v.city} · {v.court_count} courts
   {' · '}
   {Number(v.is_active) === 1 ? 'Visible' : 'Hidden'}
@@ -194,10 +363,28 @@ async function createCourt(e:FormEvent){e.preventDefault();setError('');try{awai
 
 <div className="crud-toolbar">
   <button type="button" className="text-danger" onClick={deleteVenue}><Trash2 size={16}/> Delete empty venue</button></div>
-{editingVenue&&<form className="admin-form" onSubmit={saveVenue}><h3>Edit venue information</h3><div className="form-grid">{(Object.keys(venueForm) as (keyof typeof venueForm)[]).filter(k=>k!=='image_url'&&k!=='gcash_qr_url').map(k=><label key={k}>{k.replace('_',' ')}<input required={['name','city','address'].includes(k)} value={venueForm[k]} onChange={e=>setVenueForm({...venueForm,[k]:e.target.value})}/></label>)}<VenueImageUpload value={venueForm.image_url} onChange={url=>setVenueForm(old=>({...old,image_url:url}))}/><VenueImageUpload label="GCash payment QR code" value={venueForm.gcash_qr_url} onChange={url=>setVenueForm(old=>({...old,gcash_qr_url:url}))}/></div><button className="btn btn-dark">Update venue</button></form>}
-<OwnerDiscountCodes venueId={selectedVenue}/><div className="dashboard-section-title"><h2>Court management</h2><button className="btn btn-outline small" onClick={()=>setShowCourt(!showCourt)}><Plus size={16}/> Add court</button></div>{showCourt&&<form className="admin-form" onSubmit={createCourt}><h3>Add court</h3><div className="form-grid"><label>Court name<input value={courtForm.name} required onChange={e=>setCourtForm({...courtForm,name:e.target.value})}/></label>{(['day_rate','night_rate','open_hour','close_hour'] as const).map(k=><label key={k}>{k.replace('_',' ')}<input type="number" required min={k.includes('hour')?0:1} max={k.includes('hour')?24:undefined} value={courtForm[k]} onChange={e=>setCourtForm({...courtForm,[k]:Number(e.target.value)})}/></label>)}</div><p>Night pricing applies from 5 PM onward. All times use the venue's Philippine local time.</p><button className="btn btn-dark">Save court</button></form>}<div className="court-management-list">{managedCourts.map(c=><div className="court-management-item" key={c.id}><div>
+{editingVenue&&<form className="admin-form" onSubmit={saveVenue}><h3>Edit venue information</h3><div className="form-grid">{(Object.keys(venueForm) as (keyof typeof venueForm)[]).filter(k=>k!=='image_url'&&k!=='gcash_qr_url').map(k=><label key={k}>{k.replace('_',' ')}<input required={['name','city','address'].includes(k)} value={venueForm[k]} onChange={e=>setVenueForm({...venueForm,[k]:e.target.value})}/></label>)}<VenueImageUpload value={venueForm.image_url} onChange={url=>setVenueForm(old=>({...old,image_url:url}))}/><VenueImageUpload label="BANK/GCash payment QR code" value={venueForm.gcash_qr_url} onChange={url=>setVenueForm(old=>({...old,gcash_qr_url:url}))}/></div><button className="btn btn-dark">Update venue</button></form>}
+<OwnerDiscountCodes venueId={selectedVenue}/><div className="dashboard-section-title"><h2>Court management</h2><button className="btn btn-outline small" onClick={() => {
+  if (!showCourt) {
+    setCourtForm(emptyCourtForm);
+    setEditingCourt(null);
+  }
+  setShowCourt(!showCourt);
+}}><Plus size={16}/> Add court</button></div>{showCourt&&<form className="admin-form" onSubmit={createCourt}><h3>Add court</h3><div className="form-grid"><label>Court name<input value={courtForm.name} required onChange={e=>setCourtForm({...courtForm,name:e.target.value})}/></label>{(['day_rate','night_rate','open_hour','close_hour'] as const).map(k=><label key={k}>{k.replace('_',' ')}<input type="number" required min={k.includes('hour')?0:1} max={k.includes('hour')?24:undefined} value={courtForm[k]} onChange={e=>setCourtForm({...courtForm,[k]:Number(e.target.value)})}/></label>)}</div>
+<CourtFacebookLiveField
+  url={courtForm.facebook_live_url}
+  isLive={courtForm.facebook_live_active}
+  onUrlChange={updateCourtLiveUrl}
+  onLiveChange={isLive => setCourtForm(current => ({ ...current, facebook_live_active: isLive }))}
+/>
+<CourtTermsField
+  value={courtForm.terms_and_conditions}
+  onChange={value => setCourtForm(current => ({ ...current, terms_and_conditions: value }))}
+/>
+<p>Night pricing applies from 5 PM onward. All times use the venue's Philippine local time.</p><button className="btn btn-dark">Save court</button></form>}<div className="court-management-list">{managedCourts.map(c=><div className="court-management-item" key={c.id}><div>
   <div className="court-name-status">
   <strong>{c.name}</strong>
+  {isCourtLive(c)&&<span className="court-live-badge">Live now</span>}
 
   <span
     className={
@@ -360,7 +547,18 @@ async function createCourt(e:FormEvent){e.preventDefault();setError('');try{awai
     </section>
   </>
 )}
-{editingCourt!==null&&<form className="admin-form" onSubmit={saveCourt}><h3>Edit court details</h3><div className="form-grid"><label>Court name<input value={courtForm.name} required onChange={e=>setCourtForm({...courtForm,name:e.target.value})}/></label>{(['day_rate','night_rate','open_hour','close_hour'] as const).map(k=><label key={k}>{k.replace('_',' ')}<input type="number" required min={k.includes('hour')?0:1} max={k.includes('hour')?24:undefined} value={courtForm[k]} onChange={e=>setCourtForm({...courtForm,[k]:Number(e.target.value)})}/></label>)}</div><p>Updating hours cannot exclude already reserved future time slots.</p><button className="btn btn-dark">Save changes</button></form>}
+{editingCourt!==null&&<form className="admin-form" onSubmit={saveCourt}><h3>Edit court details</h3><div className="form-grid"><label>Court name<input value={courtForm.name} required onChange={e=>setCourtForm({...courtForm,name:e.target.value})}/></label>{(['day_rate','night_rate','open_hour','close_hour'] as const).map(k=><label key={k}>{k.replace('_',' ')}<input type="number" required min={k.includes('hour')?0:1} max={k.includes('hour')?24:undefined} value={courtForm[k]} onChange={e=>setCourtForm({...courtForm,[k]:Number(e.target.value)})}/></label>)}</div>
+<CourtFacebookLiveField
+  url={courtForm.facebook_live_url}
+  isLive={courtForm.facebook_live_active}
+  onUrlChange={updateCourtLiveUrl}
+  onLiveChange={isLive => setCourtForm(current => ({ ...current, facebook_live_active: isLive }))}
+/>
+<CourtTermsField
+  value={courtForm.terms_and_conditions}
+  onChange={value => setCourtForm(current => ({ ...current, terms_and_conditions: value }))}
+/>
+<p>Updating hours cannot exclude already reserved future time slots.</p><button className="btn btn-dark">Save changes</button></form>}
 <div className="dashboard-section-title"><h2>Booking requests</h2><Link href={`/venues/${selectedVenue}`} className="btn btn-outline small">View booking board ↗</Link></div><div className="booking-list">{ownerBookings.filter(b=>b.venue_id===selectedVenue).map(b=><div className="booking-entry" key={b.id}><div className="booking-icon"><CalendarDays/></div><div className="booking-entry-main"><h3>{b.player_name} · {b.court_name}</h3><p>{b.booking_date} · {formatBookingHours(b)} · {b.player_phone||'No phone'} · {b.player_email||'No email'}</p>
 <small>
   Booking #{b.id}

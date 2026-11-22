@@ -2,8 +2,9 @@
 import {useParams} from 'next/navigation';
 import {useEffect,useMemo,useState} from 'react';
 import Link from 'next/link';
+import CourtLiveStreams from './CourtLiveStreams';
 import {ArrowLeft,MapPin,Clock3,Check,CalendarDays,ChevronLeft,ChevronRight,Info} from 'lucide-react';
-import {request,Venue,Court,Slot,money,hourLabel,localDate} from '../../../lib/api';
+import {request,Venue,Court,Slot,money,hourLabel,localDate,isCourtLive} from '../../../lib/api';
 const today=()=>{const d=new Date();d.setHours(0,0,0,0);return d};
 type Pick={courtId:number;hours:number[]};
 export default function BookingPage(){
@@ -38,6 +39,11 @@ export default function BookingPage(){
  const dates=useMemo(()=>Array.from({length:7},(_,i)=>{const d=today();d.setDate(d.getDate()+offset+i);return d}),[offset]);
  const lookup=new Map(slots.map(s=>[`${s.court_id}-${s.hour}`,s]));
  const selectedCourt=courts.find(c=>c.id===selection?.courtId);
+ const courtTerms=selectedCourt?.terms_and_conditions?.trim();
+ const courtPolicies = courts.flatMap(court => {
+   const terms = court.terms_and_conditions?.trim();
+   return terms ? [{ id: court.id, name: court.name, terms }] : [];
+ });
  const total=chosen.reduce((n,h)=>n+(lookup.get(`${selection?.courtId}-${h}`)?.price||0),0);
  function toggle(c:Court,h:number){const s=lookup.get(`${c.id}-${h}`);if(s?.status!=='available')return;
   if(validPromo?.max_slots!==null && validPromo?.max_slots!==undefined && selection?.courtId===c.id && !chosen.includes(h) && chosen.length>=validPromo.max_slots){setErr(`Coupon ${validPromo.code} allows at most ${validPromo.max_slots} selected slots. Remove the coupon to book more.`);return;}
@@ -78,17 +84,35 @@ export default function BookingPage(){
  <section className="venue-banner"><div><div className="eyebrow">BOOK YOUR NEXT MATCH</div><h1>{venue.name}</h1><div className="venue-meta"><span><MapPin size={16}/>{venue.address}</span><span>🏓 {courts.length} pickleball courts</span></div><p>{venue.description}</p></div><div className="banner-symbol">✳</div></section>
  {phoneNumber&&/^\+?\d+$/.test(phoneNumber)&&<p className="venue-contact">Venue phone <a href={`tel:${phoneNumber}`}>{venuePhone}</a></p>}
  {receipt&&<section className="success-box" role="status"><h2>Booking request submitted!</h2><p>Booking #{receipt.booking_id} · Total {money(receipt.total_amount)}. Your reservation is pending owner approval. Save your booking number for reference. GCash payment has not been automatically verified.</p><p>Contact the venue owner for confirmation.</p></section>}
+ <CourtLiveStreams key={id} courts={courts}/>
+ {courtPolicies.length > 0 && (
+  <section className="venue-court-terms" aria-labelledby="venue-court-terms-heading">
+   <h2 id="venue-court-terms-heading">Court terms and conditions</h2>
+   {courtPolicies.map(court => (
+    <details key={court.id} open={courtPolicies.length === 1}>
+     <summary>{court.name}</summary>
+     <div className="court-terms-text">{court.terms}</div>
+    </details>
+   ))}
+  </section>
+ )}
  <section className="board-section"><div className="board-top"><div><span className="overline">PICK A DATE</span><h2>Choose your <em>play time.</em></h2></div><div className="legend"><span><i className="key green"/> Available</span><span><i className="key red"/> Booked</span><span><i className="key gray"/> Unavailable</span></div></div>
  <div className="date-picker"><button aria-label="Previous week" disabled={offset===0} onClick={()=>setOffset(Math.max(0,offset-7))}><ChevronLeft/></button>{dates.map(d=><button key={localDate(d)} className={`day-button ${date===localDate(d)?'active':''}`} onClick={()=>setDate(localDate(d))}><small>{d.toLocaleDateString('en-US',{weekday:'short'})}</small><strong>{d.getDate()}</strong><small>{d.toLocaleDateString('en-US',{month:'short'})}</small></button>)}<button aria-label="Next week" onClick={()=>setOffset(offset+7)}><ChevronRight/></button></div>
  <div className="booking-toolbar"><div><strong>Booking board</strong><span>{new Date(date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</span></div><strong>{chosen.length} hour{chosen.length===1?'':'s'} selected</strong></div>
  <p className="board-help"><Info size={14}/> Select any available green hours on the same court, including nonconsecutive hours (for example, 3–4 PM and 6–7 PM). Click again to deselect. Switching courts starts a new selection.</p>
- <div className="board-scroll"><div className="board-grid" style={{gridTemplateColumns:`98px repeat(${courts.length},minmax(130px,1fr))`}}><div className="board-cell sticky-head head-time">TIME</div>{courts.map(c=><div key={c.id} className="board-cell court-head"><strong>{c.name}</strong><small>Pickleball</small></div>)}
+ <div className="board-scroll"><div className="board-grid" style={{gridTemplateColumns:`98px repeat(${courts.length},minmax(130px,1fr))`}}><div className="board-cell sticky-head head-time">TIME</div>{courts.map(c=><div key={c.id} className="board-cell court-head"><strong>{c.name}</strong>{isCourtLive(c) ? <a className="court-live-badge" href={`#court-stream-row-${c.id}`}>Live now</a> : <small>Pickleball</small>}</div>)}
  {Array.from({length:24},(_,i)=>i).flatMap(h=>[<div key={`time${h}`} className="board-cell time-cell">{hourLabel(h)}<small>{hourLabel(h+1)}</small></div>,...courts.map(c=>{const item=lookup.get(`${c.id}-${h}`);const selected=selection?.courtId===c.id&&chosen.includes(h);const available=item?.status==='available';return <button key={`${c.id}-${h}`} disabled={!available} onClick={()=>toggle(c,h)} aria-pressed={selected} className={`board-cell slot ${selected?'slot-selected':available?'slot-open':item?.status==='booked'?'slot-booked':'slot-closed'}`}>{selected?<><Check size={15}/> Selected</>:available?<><strong>{money(item.price)}</strong><small>Available</small></>:<small>{item?.status==='booked'?'Booked':item?.status==='blocked'?'Blocked':'Unavailable'}</small>}</button>})])}</div></div>
  </section>
  {selectedCourt&&chosen.length>0&&<aside className="checkout pv-checkout">
   <div className="pv-checkout-main"><span className="overline">YOUR SELECTED HOURS</span><h3>{selectedCourt.name} <span>· {chosen.length} hour{chosen.length===1?'':'s'}</span></h3>
    <p><CalendarDays size={15}/>{new Date(date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</p>
    <div className="selected-times">{chosen.map(h=><button key={h} onClick={()=>toggle(selectedCourt,h)} title="Remove hour"><Clock3 size={14}/>{hourLabel(h)} – {hourLabel(h+1)} ×</button>)}</div>
+   {courtTerms&&(
+    <details key={selectedCourt.id} className="court-terms">
+     <summary>Court terms and conditions</summary>
+     <div className="court-terms-text">{courtTerms}</div>
+    </details>
+   )}
    <div className="pv-promo" style={{margin:'14px 0'}}>
     <label htmlFor="pv-discount-code">Discount code</label>
     <div style={{display:'flex',gap:8}}><input id="pv-discount-code" placeholder="e.g. SAVE20" value={promoInput} maxLength={50} onChange={e=>{setPromoInput(e.target.value.toUpperCase());setAppliedPromo(null);setAppliedKey('')}}/>

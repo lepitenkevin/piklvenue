@@ -1,0 +1,2 @@
+ALTER TABLE courts
+    ADD COLUMN facebook_live_active BOOLEAN NOT NULL DEFAULT FALSE;

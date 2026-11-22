@@ -59,7 +59,11 @@ export default function AllVenues() {
               style={v.image_url ? {
                 backgroundImage: `url("${v.image_url}")`
               } : undefined}
-            />
+            >
+              {Number(v.has_live_court) === 1 && (
+                <span className="court-live-badge venue-live-badge">Live now</span>
+              )}
+            </div>
 
             <div className="venue-info">
               <div className="venue-location">
