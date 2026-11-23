@@ -48,6 +48,11 @@ async function handler(
     headers.set('Content-Type', contentType);
   }
 
+  if (req.method === 'POST' && path.length === 2 && path[0] === 'webhooks' && path[1] === 'paymongo') {
+    const signature = req.headers.get('paymongo-signature');
+    if (signature) headers.set('Paymongo-Signature', signature);
+  }
+
   const accept = req.headers.get('accept');
 
   if (accept) {
