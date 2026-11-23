@@ -3,6 +3,7 @@ import {useParams} from 'next/navigation';
 import {useEffect,useMemo,useState} from 'react';
 import Link from 'next/link';
 import CourtLiveStreams from './CourtLiveStreams';
+import VenuePaymentDetails from '../VenuePaymentDetails';
 import {ArrowLeft,MapPin,Clock3,Check,CalendarDays,ChevronLeft,ChevronRight,Info} from 'lucide-react';
 import {request,Venue,Court,Slot,money,hourLabel,localDate,isCourtLive} from '../../../lib/api';
 const today=()=>{const d=new Date();d.setHours(0,0,0,0);return d};
@@ -81,10 +82,21 @@ export default function BookingPage(){
 
  return <main className="booking-page shell"><Link href="/venues" className="back"><ArrowLeft size={16}/> All courts</Link>
  {loading?<p>Loading court information...</p>:venue?<>
- <section className="venue-banner"><div><div className="eyebrow">BOOK YOUR NEXT MATCH</div><h1>{venue.name}</h1><div className="venue-meta"><span><MapPin size={16}/>{venue.address}</span><span>🏓 {courts.length} pickleball courts</span></div><p>{venue.description}</p></div><div className="banner-symbol">✳</div></section>
+ <section className={`venue-banner${venue.image_url?.trim() ? ' venue-banner-with-photo' : ''}`}>
+  <div>
+   <div className="eyebrow">BOOK YOUR NEXT MATCH</div>
+   <h1>{venue.name}</h1>
+   <div className="venue-meta"><span><MapPin size={16}/>{venue.address}</span><span>🏓 {courts.length} pickleball courts</span></div>
+   <p>{venue.description}</p>
+  </div>
+  {venue.image_url?.trim() ? (
+   <img className="venue-detail-photo" src={venue.image_url.trim()} alt={`Venue photo of ${venue.name}`} width={480} height={320}/>
+  ) : <div className="banner-symbol">✳</div>}
+ </section>
  {phoneNumber&&/^\+?\d+$/.test(phoneNumber)&&<p className="venue-contact">Venue phone <a href={`tel:${phoneNumber}`}>{venuePhone}</a></p>}
+ <VenuePaymentDetails key={`payment-${venue.id}`} venue={venue}/>
  {receipt&&<section className="success-box" role="status"><h2>Booking request submitted!</h2><p>Booking #{receipt.booking_id} · Total {money(receipt.total_amount)}. Your reservation is pending owner approval. Save your booking number for reference. GCash payment has not been automatically verified.</p><p>Contact the venue owner for confirmation.</p></section>}
- <CourtLiveStreams key={id} courts={courts}/>
+ <CourtLiveStreams key={`streams-${venue.id}`} courts={courts}/>
  {courtPolicies.length > 0 && (
   <section className="venue-court-terms" aria-labelledby="venue-court-terms-heading">
    <h2 id="venue-court-terms-heading">Court terms and conditions</h2>

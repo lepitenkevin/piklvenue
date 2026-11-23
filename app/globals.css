@@ -1085,6 +1085,38 @@
   text-underline-offset: 3px;
 }
 
+.venue-banner-with-photo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+  gap: 24px;
+}
+
+.venue-detail-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+.venue-payment-preview {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin: 16px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+@media (max-width: 760px) {
+  .venue-banner-with-photo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (650px < width <= 760px) {
   .navlinks {
     display: none;

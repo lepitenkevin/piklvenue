@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { MapPin, Search } from 'lucide-react';
 import { request, Venue, money } from '../../lib/api';
+import VenuePaymentDetails from './VenuePaymentDetails';
 
 export default function AllVenues() {
   const [venues, setVenues] = useState<Venue[]>([]);
@@ -80,6 +81,8 @@ export default function AllVenues() {
                   From <strong>{money(v.price_from)}</strong>/hr
                 </span>
               </div>
+
+              <VenuePaymentDetails venue={v} />
 
               <span className="btn btn-dark">
                 Book a Court
